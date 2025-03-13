@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
+  const [debugInfo, setDebugInfo] = useState('')
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,6 +21,7 @@ export default function RegisterPage() {
     setLoading(true)
     setError('')
     setSuccess('')
+    setDebugInfo('')
     
     // Validação simples
     if (password !== confirmPassword) {
@@ -35,61 +37,91 @@ export default function RegisterPage() {
     }
     
     try {
-      // 1. Criar a conta de autenticação
+      // Log mais detalhado das tentativas
       console.log('🔐 Tentando criar usuário com email:', email)
+      console.log('📄 Dados de registro:', { email, name, passwordLength: password.length })
+      
+      // Obter URL atual para redirecionamento
+      const origin = window.location.origin
+      console.log('🔗 URL de origem para redirecionamento:', origin)
+      
+      // Tentar registrar com opções detalhadas
       const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             name,
+            full_name: name,
+            preferred_name: name.split(' ')[0]
           },
+          emailRedirectTo: `${origin}/auth/callback`
         },
       })
 
+      // Log detalhado da resposta para depuração
+      console.log('📊 Resposta do signUp:', JSON.stringify({
+        user: data.user ? { 
+          id: data.user.id,
+          email: data.user.email,
+          created_at: data.user.created_at 
+        } : null,
+        session: data.session ? 'Session Present' : 'No Session',
+        hasError: authError ? true : false
+      }))
+      
       if (authError) {
-        setError(authError.message)
+        // Log completo do erro
         console.error('❌ Erro na autenticação:', authError.message)
+        console.error('❌ Código do erro:', authError.status)
+        console.error('❌ Detalhes completos do erro:', JSON.stringify(authError))
+        
+        // Mostrar erro detalhado para o usuário
+        setError(`Erro no registro: ${authError.message}`)
+        
+        // Informações de debugging para desenvolvimento
+        setDebugInfo(`Status: ${authError.status || 'N/A'}, Nome: ${authError.name || 'N/A'}, Detalhes: ${JSON.stringify(authError)}`)
+        
+        setLoading(false)
         return
       }
 
-      console.log('✅ Autenticação criada com sucesso:', data.user?.id)
-      
-      // 2. Criar o registro do usuário na tabela users
-      if (data.user) {
-        try {
-          console.log('📝 Criando registro na tabela users para o usuário:', data.user.id)
-          const { error: dbError } = await supabase.from('users').insert({
-            id: data.user.id,
-            email,
-            name,
-            membership_level: 'basic',
-            settings: {},
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          
-          if (dbError) {
-            console.error('❌ Erro ao criar registro de usuário:', dbError)
-            setError('Erro ao criar perfil do usuário: ' + dbError.message)
-            return
-          }
-          
-          console.log('✅ Registro de usuário criado com sucesso')
-          setSuccess('Conta criada com sucesso! Redirecionando para o login...')
-          
-          // Redirecionar após sucesso
-          setTimeout(() => {
-            router.push('/login')
-          }, 2000)
-        } catch (err: any) {
-          console.error('❌ Exceção ao criar registro de usuário:', err)
-          setError('Erro ao criar perfil: ' + err.message)
-        }
+      // Verificar se temos dados de usuário
+      if (!data.user) {
+        setError('Não foi possível criar o usuário: dados de usuário ausentes na resposta')
+        console.error('❌ Sem dados de usuário na resposta')
+        setLoading(false)
+        return
       }
+
+      console.log('✅ Usuário criado com sucesso:', data.user.id)
+      
+      // Verificar se precisamos de confirmação de email
+      if (!data.session) {
+        console.log('📧 Email de confirmação enviado, aguardando verificação')
+        
+        // Tratativa específica para confirmação de email
+        setSuccess('Conta criada! Por favor, verifique seu email para confirmar o cadastro.')
+        
+        // Capturar ID para debug
+        setDebugInfo(`User ID: ${data.user.id}`)
+      } else {
+        console.log('✅ Login automático realizado com sucesso')
+        setSuccess('Conta criada com sucesso! Redirecionando para o dashboard...')
+        
+        // Redirecionamento mais rápido quando temos sessão
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 1500)
+      }
+      
     } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro ao criar sua conta')
-      console.error('❌ Erro inesperado:', err)
+      // Captura de qualquer erro não previsto
+      console.error('❌ Exceção não tratada:', err)
+      console.error('❌ Stack trace:', err.stack)
+      
+      setError(`Erro inesperado: ${err.message || 'Desconhecido'}`)
+      setDebugInfo(`Tipo: ${err.name || 'N/A'}, Stack: ${err.stack ? err.stack.substring(0, 100) + '...' : 'N/A'}`)
     } finally {
       setLoading(false)
     }
@@ -114,6 +146,9 @@ export default function RegisterPage() {
             <div className="bg-red-500/20 text-red-300 p-4 border-l-4 border-red-500">
               <p className="font-medium">Erro</p>
               <p className="text-sm">{error}</p>
+              {debugInfo && (
+                <p className="text-xs mt-2 text-red-400 opacity-80">{debugInfo}</p>
+              )}
             </div>
           )}
 
@@ -121,6 +156,9 @@ export default function RegisterPage() {
             <div className="bg-emerald-500/20 text-emerald-300 p-4 border-l-4 border-emerald-500">
               <p className="font-medium">Sucesso</p>
               <p className="text-sm">{success}</p>
+              {debugInfo && (
+                <p className="text-xs mt-2 opacity-80">{debugInfo}</p>
+              )}
             </div>
           )}
 

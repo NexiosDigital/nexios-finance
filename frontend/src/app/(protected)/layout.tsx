@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar from '@/components/Sidebar'
 import MobileHeader from '@/components/MobileHeader'
 
@@ -13,12 +13,21 @@ export default function ProtectedLayout({
 }) {
   const { user, isLoading } = useAuth()
   const router = useRouter()
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    // Verificar autenticação e redirecionar se necessário
+    if (!isLoading && !user && !isRedirecting) {
+      console.log('🚫 Usuário não autenticado, redirecionando para login...')
+      setIsRedirecting(true)
       router.push('/login')
     }
-  }, [isLoading, user, router])
+    
+    // Logar quando autenticado com sucesso
+    if (!isLoading && user) {
+      console.log('✅ Usuário autenticado no layout protegido:', user.id)
+    }
+  }, [isLoading, user, router, isRedirecting])
 
   // Mostrar loading enquanto verifica autenticação
   if (isLoading) {
@@ -29,9 +38,14 @@ export default function ProtectedLayout({
     )
   }
 
-  // Se não estiver autenticado, não renderiza o conteúdo
+  // Mostra tela de redirecionamento em vez de tela em branco
   if (!user) {
-    return null
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-gray-950 flex-col">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500 mb-4"></div>
+        <p className="text-gray-400">Redirecionando para o login...</p>
+      </div>
+    )
   }
 
   return (

@@ -10,13 +10,47 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isResendingEmail, setIsResendingEmail] = useState(false)
   const router = useRouter()
+
+  // Função para reenviar email de confirmação
+  const resendConfirmationEmail = async () => {
+    if (!email) {
+      setError('Digite seu email para reenviar a confirmação')
+      return
+    }
+    
+    setIsResendingEmail(true)
+    setError('')
+    setSuccess('')
+    
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      })
+      
+      if (resendError) {
+        console.error('❌ Erro ao reenviar email:', resendError.message)
+        setError(`Erro ao reenviar email: ${resendError.message}`)
+      } else {
+        setSuccess('Email de confirmação reenviado. Por favor, verifique sua caixa de entrada e spam.')
+      }
+    } catch (err: any) {
+      console.error('❌ Erro ao reenviar confirmação:', err)
+      setError('Erro ao reenviar email de confirmação')
+    } finally {
+      setIsResendingEmail(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setSuccess('')
     
     try {
       console.log('🔐 Tentando fazer login com email:', email)
@@ -27,14 +61,25 @@ export default function LoginPage() {
 
       if (loginError) {
         console.error('❌ Erro no login:', loginError.message)
-        setError('Email ou senha incorretos')
+        
+        // Mensagem específica para email não confirmado
+        if (loginError.message === 'Email not confirmed') {
+          setError('É necessário confirmar seu email antes de fazer login. Por favor, verifique sua caixa de entrada e pasta de spam.')
+        } else {
+          setError('Email ou senha incorretos')
+        }
+        
+        setLoading(false)
         return
       }
 
       console.log('✅ Login bem-sucedido:', data.user?.id)
-      
-      // Redirecionar após login bem-sucedido
-      router.push('/dashboard')
+      console.log('🔄 Redirecionando para dashboard...')
+            
+      // Usar um timeout para garantir que a sessão seja configurada
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 500)
     } catch (err: any) {
       console.error('❌ Erro inesperado no login:', err)
       setError('Ocorreu um erro ao fazer login. Tente novamente.')
@@ -62,6 +107,25 @@ export default function LoginPage() {
             <div className="bg-red-500/20 text-red-300 p-4 border-l-4 border-red-500">
               <p className="font-medium">Erro</p>
               <p className="text-sm">{error}</p>
+              
+              {/* Botão para reenviar email se o erro for de confirmação */}
+              {error.includes('confirmar seu email') && (
+                <button
+                  type="button"
+                  onClick={resendConfirmationEmail}
+                  disabled={isResendingEmail}
+                  className="mt-2 text-emerald-400 hover:text-emerald-300 text-sm underline"
+                >
+                  {isResendingEmail ? 'Enviando...' : 'Reenviar email de confirmação'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-emerald-500/20 text-emerald-300 p-4 border-l-4 border-emerald-500">
+              <p className="font-medium">Sucesso</p>
+              <p className="text-sm">{success}</p>
             </div>
           )}
 
