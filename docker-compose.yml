@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # Frontend - Next.js application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - ./frontend/.env.local
+    depends_on:
+      - node-api
+    networks:
+      - nexios-network
+
+  # Backend - Node.js API
+  node-api:
+    build:
+      context: ./backend/node-api
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend/node-api:/app
+      - /app/node_modules
+    env_file:
+      - ./backend/node-api/.env
+    depends_on:
+      - database
+    networks:
+      - nexios-network
+
+  # AI Service - Python FastAPI
+  ai-service:
+    build:
+      context: ./backend/ai-service
+      dockerfile: Dockerfile
+    ports:
+      - "3002:8000"
+    volumes:
+      - ./backend/ai-service:/app
+    env_file:
+      - ./backend/ai-service/.env
+    depends_on:
+      - node-api
+    networks:
+      - nexios-network
+
+  # WhatsApp Integration Service
+  whatsapp-service:
+    build:
+      context: ./backend/integrations/whatsapp
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./backend/integrations/whatsapp:/app
+      - /app/node_modules
+    env_file:
+      - ./backend/integrations/whatsapp/.env
+    depends_on:
+      - node-api
+    networks:
+      - nexios-network
+
+  # n8n Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./backend/integrations/n8n/flows:/home/node/.n8n
+    env_file:
+      - ./backend/integrations/n8n/.env
+    depends_on:
+      - node-api
+    networks:
+      - nexios-network
+
+  # Database service
+  database:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-nexios_finance}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/supabase/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
+      - ./database/supabase/seed.sql:/docker-entrypoint-initdb.d/2-seed.sql
+    networks:
+      - nexios-network
+
+volumes:
+  postgres-data:
+
+networks:
+  nexios-network:
+    driver: bridge

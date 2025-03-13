@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #0EAE7B 0%, #034D2D 100%);
+}
+
+.bg-gradient-primary-reverse {
+  background: linear-gradient(135deg, #034D2D 0%, #0EAE7B 100%);
+}
+
+.bg-gradient-dark {
+  background: linear-gradient(135deg, #1E1E1E 0%, #121212 100%);
+}
