@@ -86,3 +86,16 @@ input:-moz-autofill:focus {
   transition: background-color 5000s ease-in-out 0s;
   box-shadow: 0 0 0px 1000px transparent inset;
 }
+
+/* Gradientes */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #0EAE7B 0%, #034D2D 100%);
+}
+
+.bg-gradient-primary-reverse {
+  background: linear-gradient(135deg, #034D2D 0%, #0EAE7B 100%);
+}
+
+.bg-gradient-dark {
+  background: linear-gradient(135deg, #1E1E1E 0%, #121212 100%);
+}

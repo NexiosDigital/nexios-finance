@@ -1,6 +1,5 @@
 'use client'
 
-// app/(protected)/dashboard/page.tsx
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/Card'
@@ -64,7 +63,7 @@ const StatCard = ({
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [greeting, setGreeting] = useState('')
 
   useEffect(() => {
@@ -84,7 +83,7 @@ export default function DashboardPage() {
     <div>
       {/* Cabeçalho */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">{greeting}, {user?.user_metadata?.name?.split(' ')[0] || 'usuário'}</h1>
+        <h1 className="text-3xl font-bold">{greeting}, {profile?.name?.split(' ')[0] || user?.user_metadata?.name?.split(' ')[0] || 'usuário'}</h1>
         <p className="text-gray-400 mt-1">Aqui está um resumo das suas finanças</p>
       </div>
 
