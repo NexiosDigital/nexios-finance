@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
@@ -47,46 +47,45 @@ export default function LoginPage() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    setSuccess('')
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess('');
     
     try {
-      console.log('🔐 Tentando fazer login com email:', email)
+      console.log('🔐 Tentando fazer login com email:', email);
+      
       const { data, error: loginError } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
+      });
 
       if (loginError) {
-        console.error('❌ Erro no login:', loginError.message)
+        console.error('❌ Erro no login:', loginError.message);
         
         // Mensagem específica para email não confirmado
         if (loginError.message === 'Email not confirmed') {
-          setError('É necessário confirmar seu email antes de fazer login. Por favor, verifique sua caixa de entrada e pasta de spam.')
+          setError('É necessário confirmar seu email antes de fazer login. Por favor, verifique sua caixa de entrada e pasta de spam.');
         } else {
-          setError('Email ou senha incorretos')
+          setError('Email ou senha incorretos');
         }
         
-        setLoading(false)
-        return
+        setLoading(false);
+        return;
       }
 
-      console.log('✅ Login bem-sucedido:', data.user?.id)
-      console.log('🔄 Redirecionando para dashboard...')
-            
-      // Usar um timeout para garantir que a sessão seja configurada
-      setTimeout(() => {
-        router.push('/dashboard')
-      }, 500)
+      console.log('✅ Login bem-sucedido:', data.user?.id);
+      setSuccess('Login bem-sucedido! Redirecionando...');
+      
+      // Forçar redirecionamento direto sem esperar
+      window.location.replace('/dashboard');
+      
     } catch (err: any) {
-      console.error('❌ Erro inesperado no login:', err)
-      setError('Ocorreu um erro ao fazer login. Tente novamente.')
-    } finally {
-      setLoading(false)
+      console.error('❌ Erro inesperado no login:', err);
+      setError('Ocorreu um erro ao fazer login. Tente novamente.');
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-emerald-900/30 to-gray-900 p-4">

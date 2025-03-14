@@ -3,13 +3,31 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { Session, User, AuthError } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { User } from '@/lib/database.types'
+import { supabase } from '@/lib/supabase-client'
+import { User as UserType } from '@/lib/database.types'
+
+// Função utilitária para verificar se estamos no navegador
+const isBrowser = typeof window !== 'undefined';
+
+// Função para inicializar a autenticação no cliente
+const initializeAuth = async () => {
+  if (!isBrowser) return;
+  
+  try {
+    const token = localStorage.getItem('supabase.auth.token');
+    if (token) {
+      console.log('🔄 Tentando restaurar sessão do token armazenado...');
+      await supabase.auth.setSession({ access_token: token, refresh_token: '' });
+    }
+  } catch (error) {
+    console.error('❌ Erro ao inicializar autenticação:', error);
+  }
+};
 
 type AuthContextType = {
   session: Session | null
-  user: SupabaseUser | null
-  profile: User | null
+  user: User | null
+  profile: UserType | null
   isLoading: boolean
   signUp: (email: string, password: string, name: string) => Promise<{
     error: Error | null;
@@ -40,10 +58,10 @@ const defaultContextValue: AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>(defaultContextValue)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
-  const [user, setUser] = useState<SupabaseUser | null>(null)
-  const [profile, setProfile] = useState<User | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<UserType | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const router = useRouter()
 
@@ -61,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null
       }
 
-      return data as User
+      return data as UserType
     } catch (error) {
       console.error('Erro ao carregar perfil:', error)
       return null
@@ -69,6 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    // Inicializar a autenticação apenas no cliente
+    if (isBrowser) {
+      initializeAuth();
+    }
+    
     // Obtém a sessão atual ao carregar
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -78,6 +101,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session.user)
         const userProfile = await loadUserProfile(session.user.id)
         setProfile(userProfile)
+      } else if (isBrowser) {
+        // Tentar recuperar do localStorage (nossa solução de contorno)
+        const token = localStorage.getItem('supabase.auth.token');
+        const storedUser = localStorage.getItem('supabase.auth.user');
+        
+        if (token && storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser);
+            const userProfile = await loadUserProfile(parsedUser.id);
+            setProfile(userProfile);
+          } catch (e) {
+            console.error('Erro ao recuperar usuário do localStorage:', e);
+          }
+        }
       }
       
       setIsLoading(false)
@@ -87,16 +125,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Configura o listener para mudanças na autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log(`🔄 Evento de autenticação: ${event}`);
         setSession(session)
         
         if (session?.user) {
           setUser(session.user)
           const userProfile = await loadUserProfile(session.user.id)
           setProfile(userProfile)
+          
+          // Armazenar manualmente para contingência
+          if (isBrowser) {
+            localStorage.setItem('supabase.auth.token', session.access_token);
+            localStorage.setItem('supabase.auth.user', JSON.stringify(session.user));
+          }
         } else {
           setUser(null)
           setProfile(null)
+          
+          // Limpar armazenamento manual
+          if (isBrowser) {
+            localStorage.removeItem('supabase.auth.token');
+            localStorage.removeItem('supabase.auth.user');
+          }
         }
         
         setIsLoading(false)
@@ -152,26 +203,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Login de usuário
   const signIn = async (email: string, password: string) => {
     try {
-      const result = await supabase.auth.signInWithPassword({
+      setIsLoading(true);
+      
+      // Primeiro, limpar qualquer sessão antiga
+      await supabase.auth.signOut();
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
+      });
       
-      if (result.error) {
-        throw result.error
+      if (error) {
+        throw error;
       }
       
-      return { error: null, data: result.data }
+      // Salvar token manualmente
+      if (data.session && isBrowser) {
+        localStorage.setItem('supabase.auth.token', data.session.access_token);
+        
+        // Armazenar informações do usuário para uso offline
+        localStorage.setItem('supabase.auth.user', JSON.stringify(data.user));
+      }
+      
+      console.log('✅ Login bem-sucedido no AuthContext, redirecionando...');
+      
+      // Redirecionamento direto após login bem-sucedido
+      window.location.replace('/dashboard');
+      
+      return { error: null, data };
     } catch (error: any) {
-      console.error('Erro no login:', error)
-      return { error, data: null }
+      console.error('❌ Erro no login:', error);
+      return { error, data: null };
+    } finally {
+      setIsLoading(false);
     }
   }
 
   // Logout de usuário
   const signOut = async () => {
+    // Limpar localStorage primeiro
+    if (isBrowser) {
+      localStorage.removeItem('supabase.auth.token');
+      localStorage.removeItem('supabase.auth.user');
+    }
+    
+    // Fazer logout no Supabase
     await supabase.auth.signOut()
-    router.push('/login')
+    
+    // Redirecionar para login
+    window.location.href = '/login'
   }
 
   // Resetar senha
