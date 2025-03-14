@@ -1,172 +1,233 @@
-'use client'
+// src/app/(protected)/dashboard/page.tsx
+'use client';
 
-import { useEffect, useState } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
-import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { 
-  Wallet, 
-  TrendingUp, 
-  BarChart, 
-  DollarSign,
-  ArrowUp,
-  ArrowDown
-} from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Card } from '@/components/ui/Card';
+import { Alert } from '@/components/ui/Alert';
+import DashboardSummary from './components/DashboardSummary';
+import TransactionsList from './components/TransactionsList';
+import IncomeExpenseChart from './components/IncomeExpenseChart';
+import SpendingByCategoryChart from './components/SpendingByCategoryChart';
+import BudgetProgress from './components/BudgetProgress';
 
-// Componente de Card de Estatística
-const StatCard = ({ 
-  title, 
-  value, 
-  icon, 
-  change, 
-  changeType 
-}: { 
-  title: string
-  value: string
-  icon: React.ReactNode
-  change?: string
-  changeType?: 'positive' | 'negative' | 'neutral'
-}) => {
-  // Definir cores baseadas no tipo de mudança
-  const changeColor = {
-    positive: 'text-emerald-500',
-    negative: 'text-red-500',
-    neutral: 'text-gray-400',
-  }[changeType || 'neutral']
+type Transaction = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  category_id: string;
+  category?: {
+    name: string;
+    color: string;
+    icon: string;
+  };
+};
 
-  const changeIcon = changeType === 'positive' ? <ArrowUp className="h-3 w-3" /> : 
-                     changeType === 'negative' ? <ArrowDown className="h-3 w-3" /> : null
+type DashboardData = {
+  totalBalance: number;
+  totalIncome: number;
+  totalExpenses: number;
+  transactions: Transaction[];
+  spendingByCategory: {
+    category: string;
+    amount: number;
+    color: string;
+  }[];
+  budgetProgress: {
+    category: string;
+    spent: number;
+    limit: number;
+    color: string;
+  }[];
+};
 
-  return (
-    <Card>
-      <Card.Content className="p-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-gray-400 text-sm font-medium mb-1">{title}</p>
-            <h3 className="text-2xl font-bold">{value}</h3>
-            
-            {change && (
-              <div className={`flex items-center mt-2 text-sm ${changeColor}`}>
-                {changeIcon}
-                <span className="ml-1">{change}</span>
-              </div>
-            )}
-          </div>
-          
-          <div className="bg-gray-800 p-3 rounded-lg">
-            {icon}
-          </div>
-        </div>
-      </Card.Content>
-    </Card>
-  )
-}
-
-export default function DashboardPage() {
-  const { user, profile } = useAuth()
-  const [greeting, setGreeting] = useState('')
+export default function Dashboard() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [timeRange, setTimeRange] = useState<'month' | 'year'>('month');
+  const router = useRouter();
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
-    // Definir saudação baseada na hora do dia
-    const hour = new Date().getHours()
-    
-    if (hour < 12) {
-      setGreeting('Bom dia')
-    } else if (hour < 18) {
-      setGreeting('Boa tarde')
-    } else {
-      setGreeting('Boa noite')
+    async function fetchDashboardData() {
+      try {
+        setIsLoading(true);
+        
+        // Fetch user accounts and their balances
+        const { data: accounts, error: accountsError } = await supabase
+          .from('accounts')
+          .select('*');
+          
+        if (accountsError) throw new Error(accountsError.message);
+        
+        // Calculate total balance from all accounts
+        const totalBalance = accounts?.reduce((sum, account) => sum + Number(account.balance), 0) || 0;
+        
+        // Get current date and first day of current month/year for filtering
+        const now = new Date();
+        const startDate = timeRange === 'month' 
+          ? new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+          : new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+          
+        // Fetch recent transactions with their categories
+        const { data: transactions, error: transactionsError } = await supabase
+          .from('transactions')
+          .select(`
+            *,
+            category:categories(name, color, icon)
+          `)
+          .gte('date', startDate)
+          .order('date', { ascending: false })
+          .limit(10);
+          
+        if (transactionsError) throw new Error(transactionsError.message);
+        
+        // Separate income and expenses for calculations
+        const income = transactions?.filter(t => Number(t.amount) > 0) || [];
+        const expenses = transactions?.filter(t => Number(t.amount) < 0) || [];
+        
+        const totalIncome = income.reduce((sum, t) => sum + Number(t.amount), 0);
+        const totalExpenses = Math.abs(expenses.reduce((sum, t) => sum + Number(t.amount), 0));
+        
+        // Calculate spending by category
+        const categoryMap = new Map();
+        expenses.forEach(transaction => {
+          if (!transaction.category) return;
+          
+          const categoryName = transaction.category.name;
+          if (!categoryMap.has(categoryName)) {
+            categoryMap.set(categoryName, {
+              category: categoryName, 
+              amount: 0,
+              color: transaction.category.color
+            });
+          }
+          
+          const item = categoryMap.get(categoryName);
+          item.amount += Math.abs(Number(transaction.amount));
+        });
+        
+        const spendingByCategory = Array.from(categoryMap.values());
+        
+        // Fetch budget data
+        const { data: budgets, error: budgetsError } = await supabase
+          .from('budgets')
+          .select(`
+            *,
+            category:categories(name, color)
+          `)
+          .eq('period', timeRange === 'month' ? 'monthly' : 'yearly');
+          
+        if (budgetsError) throw new Error(budgetsError.message);
+        
+        // Calculate budget progress
+        const budgetProgress = budgets?.map(budget => {
+          const categorySpending = spendingByCategory.find(
+            cat => cat.category === budget.category?.name
+          );
+          
+          return {
+            category: budget.category?.name || 'Outro',
+            spent: categorySpending?.amount || 0,
+            limit: Number(budget.amount),
+            color: budget.category?.color || '#0EAE7B'
+          };
+        }) || [];
+        
+        setDashboardData({
+          totalBalance,
+          totalIncome,
+          totalExpenses,
+          transactions: transactions || [],
+          spendingByCategory,
+          budgetProgress,
+        });
+        
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError('Erro ao carregar dados do dashboard');
+      } finally {
+        setIsLoading(false);
+      }
     }
-  }, [])
+
+    fetchDashboardData();
+  }, [supabase, timeRange]);
+
+  if (isLoading) {
+    return <div className="flex justify-center p-10">Carregando...</div>;
+  }
+
+  if (error) {
+    return <Alert variant="error">{error}</Alert>;
+  }
 
   return (
-    <div>
-      {/* Cabeçalho */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">{greeting}, {profile?.name?.split(' ')[0] || user?.user_metadata?.name?.split(' ')[0] || 'usuário'}</h1>
-        <p className="text-gray-400 mt-1">Aqui está um resumo das suas finanças</p>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Dashboard Financeiro</h1>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setTimeRange('month')}
+            className={`px-3 py-1 rounded ${
+              timeRange === 'month' ? 'bg-emerald-600' : 'bg-gray-700'
+            }`}
+          >
+            Mês Atual
+          </button>
+          <button
+            onClick={() => setTimeRange('year')}
+            className={`px-3 py-1 rounded ${
+              timeRange === 'year' ? 'bg-emerald-600' : 'bg-gray-700'
+            }`}
+          >
+            Ano Atual
+          </button>
+        </div>
       </div>
 
-      {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard 
-          title="Saldo Total" 
-          value="R$ 12.580,45" 
-          icon={<Wallet className="h-6 w-6 text-emerald-500" />}
-          change="+ 5,2% este mês"
-          changeType="positive"
-        />
-        
-        <StatCard 
-          title="Receitas" 
-          value="R$ 8.950,00" 
-          icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
-          change="+ 1,8% este mês"
-          changeType="positive"
-        />
-        
-        <StatCard 
-          title="Despesas" 
-          value="R$ 5.372,55" 
-          icon={<BarChart className="h-6 w-6 text-red-500" />}
-          change="- 3,6% este mês"
-          changeType="negative"
-        />
-        
-        <StatCard 
-          title="Investimentos" 
-          value="R$ 32.145,89" 
-          icon={<DollarSign className="h-6 w-6 text-blue-500" />}
-          change="+ 2,4% este mês"
-          changeType="positive"
-        />
-      </div>
+      {dashboardData && (
+        <>
+          <DashboardSummary
+            balance={dashboardData.totalBalance}
+            income={dashboardData.totalIncome}
+            expenses={dashboardData.totalExpenses}
+          />
 
-      {/* Área de Ação */}
-      <Card className="mb-8 bg-gradient-to-r from-gray-800 to-gray-900 border-none">
-        <Card.Content className="p-6">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div>
-              <h3 className="text-xl font-bold mb-2">Complete seu perfil financeiro</h3>
-              <p className="text-gray-400">
-                Configure suas contas e categorias para obter insights mais precisos
-              </p>
-            </div>
-            
-            <Button 
-              variant="primary" 
-              className="mt-4 md:mt-0"
-            >
-              Completar Configuração
-            </Button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <Card title="Receitas e Despesas">
+              <IncomeExpenseChart
+                income={dashboardData.totalIncome}
+                expenses={dashboardData.totalExpenses}
+              />
+            </Card>
+            <Card title="Gastos por Categoria">
+              <SpendingByCategoryChart data={dashboardData.spendingByCategory} />
+            </Card>
           </div>
-        </Card.Content>
-      </Card>
 
-      {/* Área para Gráficos e Análises */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <Card.Header>
-            <h3 className="text-lg font-medium">Despesas por Categoria</h3>
-          </Card.Header>
-          <Card.Content>
-            <div className="flex justify-center items-center h-64 bg-gray-900 rounded-lg">
-              <p className="text-gray-400">Gráfico de despesas será implementado aqui</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {dashboardData.budgetProgress.map((budget, index) => (
+              <BudgetProgress key={index} {...budget} />
+            ))}
+          </div>
+
+          <Card title="Transações Recentes">
+            <div className="mb-4 flex justify-end">
+              <button
+                onClick={() => router.push('/transactions')}
+                className="text-sm text-emerald-500 hover:text-emerald-400"
+              >
+                Ver todas
+              </button>
             </div>
-          </Card.Content>
-        </Card>
-        
-        <Card>
-          <Card.Header>
-            <h3 className="text-lg font-medium">Fluxo de Caixa Recente</h3>
-          </Card.Header>
-          <Card.Content>
-            <div className="flex justify-center items-center h-64 bg-gray-900 rounded-lg">
-              <p className="text-gray-400">Gráfico de fluxo de caixa será implementado aqui</p>
-            </div>
-          </Card.Content>
-        </Card>
-      </div>
+            <TransactionsList transactions={dashboardData.transactions} />
+          </Card>
+        </>
+      )}
     </div>
-  )
+  );
 }
