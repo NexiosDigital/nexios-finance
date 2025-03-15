@@ -78,9 +78,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Função de logout
+  // Função de logout melhorada
   const signOut = async () => {
     try {
+      // Limpar todos os itens de autenticação do localStorage
+      if (isBrowser) {
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('supabase.auth.refreshToken');
+        localStorage.removeItem('supabase.auth.user');
+        localStorage.removeItem('supabase.auth.expires_at');
+        
+        // Limpar quaisquer cookies relacionados
+        document.cookie = 'supabase-auth-token=; Max-Age=0; path=/;';
+        document.cookie = 'sb-access-token=; Max-Age=0; path=/;';
+        document.cookie = 'sb-refresh-token=; Max-Age=0; path=/;';
+      }
+      
+      // Executar o logout no Supabase
       await supabase.auth.signOut();
       setUser(null);
     } catch (error) {

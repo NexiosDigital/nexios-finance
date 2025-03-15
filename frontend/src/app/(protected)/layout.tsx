@@ -26,8 +26,13 @@ export default function ProtectedLayout({
         // Obter sessão do Supabase
         const { data, error } = await supabase.auth.getSession()
         
+        // Verificar validade do token
+        const isTokenValid = data?.session?.expires_at 
+          ? data.session.expires_at > Date.now() / 1000 
+          : false;
+        
         // Verificar se temos um usuário válido com ID e token válido
-        if (data?.session?.user?.id && data.session.access_token) {
+        if (data?.session?.user?.id && data.session.access_token && isTokenValid) {
           console.log('✅ Usuário autenticado:', data.session.user.id)
           setUser(data.session.user)
           setIsAuthenticated(true)
@@ -38,7 +43,9 @@ export default function ProtectedLayout({
           // Limpar qualquer resquício de sessão
           if (isBrowser) {
             localStorage.removeItem('supabase.auth.token')
+            localStorage.removeItem('supabase.auth.refreshToken')
             localStorage.removeItem('supabase.auth.user')
+            localStorage.removeItem('supabase.auth.expires_at')
             
             // Redirecionar para login
             window.location.href = '/login'
@@ -81,13 +88,20 @@ export default function ProtectedLayout({
     }
   }, [])
 
-  // Função de logout
+  // Função de logout melhorada
   const handleSignOut = async () => {
     try {
-      // Limpar armazenamento local
+      // Limpar armazenamento local de forma completa
       if (isBrowser) {
         localStorage.removeItem('supabase.auth.token')
+        localStorage.removeItem('supabase.auth.refreshToken')
         localStorage.removeItem('supabase.auth.user')
+        localStorage.removeItem('supabase.auth.expires_at')
+        
+        // Limpar cookies relacionados ao Supabase Auth
+        document.cookie = 'supabase-auth-token=; Max-Age=0; path=/;'
+        document.cookie = 'sb-access-token=; Max-Age=0; path=/;'
+        document.cookie = 'sb-refresh-token=; Max-Age=0; path=/;'
       }
       
       // Fazer logout no Supabase
