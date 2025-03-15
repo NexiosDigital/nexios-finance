@@ -1,12 +1,13 @@
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation'; // Altere esta importação
+// Remova: import { useRouter } from 'next/router';
 import { 
   HomeIcon,
   CreditCardIcon,
   ChartPieIcon,
   BanknotesIcon,
-  TargetIcon,
+  // Remova: TargetIcon,
   CalendarIcon,
   Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
@@ -14,13 +15,20 @@ import {
   SunIcon
 } from '@heroicons/react/24/outline';
 
+// Adicione o ícone FlagIcon como fizemos no Sidebar
+const FlagIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+  </svg>
+);
+
 // Lista de links da navegação
 const navLinks = [
   { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
   { name: 'Transações', path: '/transactions', icon: CreditCardIcon },
   { name: 'Orçamentos', path: '/budgets', icon: ChartPieIcon },
   { name: 'Investimentos', path: '/investments', icon: BanknotesIcon },
-  { name: 'Metas', path: '/goals', icon: TargetIcon },
+  { name: 'Metas', path: '/goals', icon: FlagIcon },  // Use FlagIcon em vez de TargetIcon
   { name: 'Contas a Pagar', path: '/bills', icon: CalendarIcon },
 ];
 
@@ -36,16 +44,16 @@ interface MobileMenuProps {
 const MobileMenu: React.FC<MobileMenuProps> = ({
   mobileMenuOpen,
   setMobileMenuOpen,
-  user,
-  onSignOut,
-  darkMode,
-  toggleDarkMode
+  user = null, // Valor padrão
+  onSignOut = () => {}, // Valor padrão
+  darkMode = true, // Valor padrão
+  toggleDarkMode = () => {} // Valor padrão
 }) => {
-  const router = useRouter();
+  const pathname = usePathname(); // Use usePathname em vez de useRouter
   
   // Verificar se um link está ativo
   const isActiveLink = (path: string) => {
-    return router.pathname === path || router.pathname.startsWith(`${path}/`);
+    return pathname === path || pathname?.startsWith(`${path}/`);
   };
   
   return (
@@ -61,7 +69,7 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
       
       {/* Menu mobile */}
       <div 
-        className={`fixed top-[60px] bottom-0 left-0 w-64 z-30 bg-white dark:bg-dark-card transform transition-transform duration-300 ease-in-out md:hidden ${
+        className={`fixed top-[60px] bottom-0 left-0 w-64 z-30 bg-gray-800 transform transition-transform duration-300 ease-in-out md:hidden ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -77,8 +85,8 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
                     href={link.path}
                     className={`flex items-center px-3 py-3 rounded-xl transition-all ${
                       isActive 
-                        ? 'bg-primary text-white' 
-                        : `hover:bg-gradient-primary hover:text-white ${darkMode ? 'dark:text-text-primary dark:hover:text-white' : ''}`
+                        ? 'bg-emerald-600 text-white' 
+                        : `hover:bg-emerald-600 hover:text-white ${darkMode ? 'text-gray-300 hover:text-white' : ''}`
                     }`}
                     onClick={() => setMobileMenuOpen(false)}
                   >
@@ -92,17 +100,17 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
         </nav>
         
         {/* Informações do usuário e configurações no menu mobile */}
-        <div className="px-4 py-4 mt-auto absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-dark-border">
+        <div className="px-4 py-4 mt-auto absolute bottom-0 left-0 right-0 border-t border-gray-700">
           {user ? (
             <div className="space-y-4">
-              <div className="p-3 rounded-xl glass dark:glass-dark">
+              <div className="p-3 rounded-xl bg-gray-700">
                 <div className="flex items-center">
-                  <div className="rounded-full bg-primary-dark w-10 h-10 flex items-center justify-center text-white">
+                  <div className="rounded-full bg-emerald-600 w-10 h-10 flex items-center justify-center text-white">
                     {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
                   </div>
                   <div className="ml-3 flex-1 truncate">
-                    <p className="text-sm font-medium">{user.name || 'Usuário'}</p>
-                    <p className="text-xs opacity-70 truncate">{user.email}</p>
+                    <p className="text-sm font-medium text-white">{user.name || 'Usuário'}</p>
+                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
                   </div>
                 </div>
               </div>
@@ -110,7 +118,7 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
               <div className="flex space-x-2">
                 <button
                   onClick={toggleDarkMode}
-                  className="p-2 rounded-xl flex-1 flex items-center justify-center dark:bg-dark-surface bg-gray-100 hover:bg-gray-200 dark:hover:bg-dark-border transition-colors"
+                  className="p-2 rounded-xl flex-1 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
                   aria-label={darkMode ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
                 >
                   {darkMode ? (
@@ -120,8 +128,8 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
                   )}
                 </button>
                 <Link
-                  href="/settings"
-                  className="p-2 rounded-xl flex-1 flex items-center justify-center dark:bg-dark-surface bg-gray-100 hover:bg-gray-200 dark:hover:bg-dark-border transition-colors"
+                  href="/profile"
+                  className="p-2 rounded-xl flex-1 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
                   aria-label="Configurações"
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -132,7 +140,7 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
                     setMobileMenuOpen(false);
                     onSignOut();
                   }}
-                  className="p-2 rounded-xl flex-1 flex items-center justify-center dark:bg-dark-surface bg-gray-100 hover:bg-gray-200 dark:hover:bg-dark-border transition-colors"
+                  className="p-2 rounded-xl flex-1 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
                   aria-label="Sair"
                 >
                   <ArrowLeftOnRectangleIcon className="w-5 h-5" />
@@ -143,14 +151,14 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
             <div className="space-y-2">
               <Link
                 href="/login"
-                className="w-full py-2 px-4 text-center rounded-xl bg-primary text-white hover:bg-primary-dark transition-colors block"
+                className="w-full py-2 px-4 text-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors block"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Entrar
               </Link>
               <Link
-                href="/signup"
-                className="w-full py-2 px-4 text-center rounded-xl dark:bg-dark-surface dark:hover:bg-dark-border bg-gray-100 hover:bg-gray-200 transition-colors block"
+                href="/register"
+                className="w-full py-2 px-4 text-center rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors block"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Cadastrar
